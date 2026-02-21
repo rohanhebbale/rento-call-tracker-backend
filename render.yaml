@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: rento-call-tracker-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
