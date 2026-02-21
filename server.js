@@ -50,6 +50,10 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ ok: true })
 })
 
+app.head('/health', (_req, res) => {
+  res.status(200).end()
+})
+
 app.post('/track-call', async (_req, res) => {
   try {
     const spreadsheetId = process.env.GOOGLE_SHEET_ID
