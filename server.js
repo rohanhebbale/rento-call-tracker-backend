@@ -243,6 +243,104 @@ app.post('/track-call', async (_req, res) => {
   }
 })
 
+app.post('/track-checkout-funnel', async (req, res) => {
+  try {
+    const spreadsheetId = process.env.GOOGLE_SHEET_ID
+    const sheetName = process.env.CHECKOUT_SHEET_TAB || 'checkout'
+    const timeZone = process.env.LOG_TIMEZONE || 'Asia/Kolkata'
+    const action = String(req.body?.action || '').trim()
+    const location = String(req.body?.location || 'Unknown').trim() || 'Unknown'
+
+    if (!spreadsheetId) {
+      throw new Error('Missing GOOGLE_SHEET_ID env var')
+    }
+
+    const actionColumnMap = {
+      call: 2,
+      add_to_cart: 3,
+      proceed_checkout: 4,
+    }
+
+    const targetColumnIndex = actionColumnMap[action]
+    if (targetColumnIndex === undefined) {
+      res.status(400).json({ ok: false, error: 'Invalid action' })
+      return
+    }
+
+    const sheets = await getSheetsClient()
+    const dateKey = getIsoDateInTimeZone(timeZone)
+    const range = `${sheetName}!A:E`
+
+    const readResult = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range,
+    })
+
+    const rows = readResult.data.values || []
+    let matchedRow = -1
+
+    for (let i = 1; i < rows.length; i += 1) {
+      const rowDate = String(rows[i]?.[0] || '').trim()
+      const rowLocation = String(rows[i]?.[1] || '').trim().toLowerCase()
+
+      if (rowDate === dateKey && rowLocation === location.toLowerCase()) {
+        matchedRow = i + 1
+        break
+      }
+    }
+
+    if (matchedRow === -1) {
+      const newRow = [dateKey, location, 0, 0, 0]
+      newRow[targetColumnIndex] = 1
+
+      await sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range,
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: {
+          values: [newRow],
+        },
+      })
+
+      res.status(200).json({
+        ok: true,
+        date: dateKey,
+        location,
+        action,
+        count: 1,
+        created: true,
+      })
+      return
+    }
+
+    const existingRow = rows[matchedRow - 1] || []
+    const existingValue = parseInt(String(existingRow[targetColumnIndex] || '0'), 10) || 0
+    const nextCount = existingValue + 1
+    const targetColumnLetter = ['A', 'B', 'C', 'D', 'E'][targetColumnIndex]
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${sheetName}!${targetColumnLetter}${matchedRow}`,
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [[nextCount]],
+      },
+    })
+
+    res.status(200).json({
+      ok: true,
+      date: dateKey,
+      location,
+      action,
+      count: nextCount,
+      created: false,
+    })
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message || 'Internal error' })
+  }
+})
+
 const port = process.env.PORT || 8080
 app.listen(port, () => {
   console.log(`Call tracker backend listening on port ${port}`)
