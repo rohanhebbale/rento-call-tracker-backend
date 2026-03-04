@@ -33,6 +33,22 @@ function getIsoDateInTimeZone(timeZone) {
   return `${year}-${month}-${day}`
 }
 
+function getTimeInTimeZone(timeZone) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date())
+
+  const hour = parts.find((p) => p.type === 'hour')?.value ?? '00'
+  const minute = parts.find((p) => p.type === 'minute')?.value ?? '00'
+  const second = parts.find((p) => p.type === 'second')?.value ?? '00'
+
+  return `${hour}:${minute}:${second}`
+}
+
 function getServiceAccount() {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
   if (!raw) {
@@ -262,11 +278,11 @@ app.post('/track-checkout-funnel', async (req, res) => {
     }
 
     const actionColumnMap = {
-      call: 2, // "calls" column (C)
-      add_to_cart: 3, // "cart" column (D)
-      proceed_checkout: 4, // "checkout" column (E)
-      login: 5, // "login" column (F)
-      pay: 6, // "pay" column (G)
+      call: 3, // "calls" column (D)
+      add_to_cart: 4, // "cart" column (E)
+      proceed_checkout: 5, // "checkout" column (F)
+      login: 6, // "login" column (G)
+      pay: 7, // "pay" column (H)
     }
 
     const targetColumnIndex = actionColumnMap[action]
@@ -277,7 +293,8 @@ app.post('/track-checkout-funnel', async (req, res) => {
 
     const sheets = await getSheetsClient()
     const dateKey = getIsoDateInTimeZone(timeZone)
-    const range = `${sheetName}!A:H`
+    const timeKey = getTimeInTimeZone(timeZone)
+    const range = `${sheetName}!A:I`
 
     const readResult = await sheets.spreadsheets.values.get({
       spreadsheetId,
@@ -288,7 +305,7 @@ app.post('/track-checkout-funnel', async (req, res) => {
     let matchedRow = -1
 
     for (let i = 1; i < rows.length; i += 1) {
-      const rowSessionId = String(rows[i]?.[7] || '').trim()
+      const rowSessionId = String(rows[i]?.[8] || '').trim()
       if (rowSessionId && rowSessionId === sessionId) {
         matchedRow = i + 1
         break
@@ -296,7 +313,7 @@ app.post('/track-checkout-funnel', async (req, res) => {
     }
 
     if (matchedRow === -1) {
-      const newRow = [dateKey, location, 0, 0, 0, 0, 0, sessionId]
+      const newRow = [dateKey, timeKey, location, 0, 0, 0, 0, 0, sessionId]
       newRow[targetColumnIndex] = 1
 
       await sheets.spreadsheets.values.append({
@@ -323,7 +340,7 @@ app.post('/track-checkout-funnel', async (req, res) => {
     const existingRow = rows[matchedRow - 1] || []
     const existingValue = parseInt(String(existingRow[targetColumnIndex] || '0'), 10) || 0
     const nextCount = existingValue + 1
-    const targetColumnLetter = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'][targetColumnIndex]
+    const targetColumnLetter = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'][targetColumnIndex]
 
     await sheets.spreadsheets.values.update({
       spreadsheetId,
