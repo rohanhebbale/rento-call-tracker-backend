@@ -250,9 +250,15 @@ app.post('/track-checkout-funnel', async (req, res) => {
     const timeZone = process.env.LOG_TIMEZONE || 'Asia/Kolkata'
     const action = String(req.body?.action || '').trim()
     const location = String(req.body?.location || 'Unknown').trim() || 'Unknown'
+    const sessionId = String(req.body?.sessionId || '').trim()
 
     if (!spreadsheetId) {
       throw new Error('Missing GOOGLE_SHEET_ID env var')
+    }
+
+    if (!sessionId) {
+      res.status(400).json({ ok: false, error: 'Missing sessionId' })
+      return
     }
 
     const actionColumnMap = {
@@ -271,7 +277,7 @@ app.post('/track-checkout-funnel', async (req, res) => {
 
     const sheets = await getSheetsClient()
     const dateKey = getIsoDateInTimeZone(timeZone)
-    const range = `${sheetName}!A:G`
+    const range = `${sheetName}!A:H`
 
     const readResult = await sheets.spreadsheets.values.get({
       spreadsheetId,
@@ -282,17 +288,15 @@ app.post('/track-checkout-funnel', async (req, res) => {
     let matchedRow = -1
 
     for (let i = 1; i < rows.length; i += 1) {
-      const rowDate = String(rows[i]?.[0] || '').trim()
-      const rowLocation = String(rows[i]?.[1] || '').trim().toLowerCase()
-
-      if (rowDate === dateKey && rowLocation === location.toLowerCase()) {
+      const rowSessionId = String(rows[i]?.[7] || '').trim()
+      if (rowSessionId && rowSessionId === sessionId) {
         matchedRow = i + 1
         break
       }
     }
 
     if (matchedRow === -1) {
-      const newRow = [dateKey, location, 0, 0, 0, 0, 0]
+      const newRow = [dateKey, location, 0, 0, 0, 0, 0, sessionId]
       newRow[targetColumnIndex] = 1
 
       await sheets.spreadsheets.values.append({
@@ -319,7 +323,7 @@ app.post('/track-checkout-funnel', async (req, res) => {
     const existingRow = rows[matchedRow - 1] || []
     const existingValue = parseInt(String(existingRow[targetColumnIndex] || '0'), 10) || 0
     const nextCount = existingValue + 1
-    const targetColumnLetter = ['A', 'B', 'C', 'D', 'E', 'F', 'G'][targetColumnIndex]
+    const targetColumnLetter = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'][targetColumnIndex]
 
     await sheets.spreadsheets.values.update({
       spreadsheetId,
