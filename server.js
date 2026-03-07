@@ -76,6 +76,31 @@ function getRazorpayClient() {
   })
 }
 
+async function sendTelegramLoginNotification(phone) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN
+  const chatId = process.env.TELEGRAM_CHAT_ID
+
+  if (!botToken || !chatId) {
+    throw new Error('Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID env vars')
+  }
+
+  const text = String(phone || '').trim()
+  if (!text) {
+    throw new Error('Missing phone number for Telegram notification')
+  }
+
+  const telegramUrl =
+    'https://api.telegram.org/bot' + encodeURIComponent(botToken) + '/sendMessage' +
+    '?chat_id=' + encodeURIComponent(chatId) +
+    '&text=' + encodeURIComponent(text)
+
+  const response = await fetch(telegramUrl, { method: 'GET' })
+  const bodyText = await response.text()
+  if (!response.ok) {
+    throw new Error('Telegram request failed: ' + response.status + ' ' + bodyText)
+  }
+}
+
 async function getSheetsClient() {
   const credentials = getServiceAccount()
   const auth = new google.auth.GoogleAuth({
@@ -91,6 +116,21 @@ app.get('/health', (_req, res) => {
 
 app.head('/health', (_req, res) => {
   res.status(200).end()
+})
+
+app.post('/notify-login', async (req, res) => {
+  try {
+    const phone = String(req.body?.phone || '').trim()
+    if (!phone) {
+      res.status(400).json({ ok: false, error: 'Missing phone' })
+      return
+    }
+
+    await sendTelegramLoginNotification(phone)
+    res.status(200).json({ ok: true })
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message || 'Failed to send Telegram notification' })
+  }
 })
 
 app.get('/payments/key', (_req, res) => {

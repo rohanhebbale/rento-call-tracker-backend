@@ -5,6 +5,7 @@ Backend API to track call clicks and increment daily counts in Google Sheets.
 ## Endpoints
 - `GET /health`
 - `POST /track-call`
+- `POST /notify-login`
 
 ## Required env vars
 - `GOOGLE_SHEET_ID`
@@ -13,6 +14,8 @@ Backend API to track call clicks and increment daily counts in Google Sheets.
 ## Optional env vars
 - `GOOGLE_SHEET_TAB` (default: `Sheet1`)
 - `LOG_TIMEZONE` (default: `Asia/Kolkata`)
+- `TELEGRAM_BOT_TOKEN` (required for `/notify-login`)
+- `TELEGRAM_CHAT_ID` (required for `/notify-login`)
 
 ## Local run
 ```bash
